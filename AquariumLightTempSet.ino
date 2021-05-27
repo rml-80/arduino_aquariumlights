@@ -1,3 +1,37 @@
+/*
+Button functions
+
+Press WhiteButton to enter the menu
+ In Set Sunrise Time:
+    Press YellowButton to add 1 hour, goes to 23 then to 0
+    Press RedButton to add 5 minutes, goes to 55 then to 0
+  In Set Sunrise Time:
+    Same as SetSunriseTime
+  In Plant light off:
+    Same as SetSunriseTime
+  In Plant light on:
+    Same as SetSunriseTime
+  Adjust clock:
+    Press YellowButton to add 1 hour, goes to 23 then to 0
+    Press RedButton to add 1 minutes, goes to 59 then to 0
+  Set Minimum temp:
+    Press YellowButton to increase degrees, +
+    Press RedButton to decrease degrees, -
+  Set Maximum temp:
+    Same as Set Minimum temp
+  Set Moon Brightness:
+    Press YellowButton to change Moon brightness, add 17 for every press
+    Press RedButton to light Moon light to see how the brightness it is
+  Set Moon phase:
+    Press YellowButton to add a day, 0 = no moon, 14 = full moon
+    Press RedButton to subtract a day
+  Lights ON/OFF:
+    Press YellowButton to toggle through lights, (Sun, Moon, Plant)
+    Press RedButton to toggle light ON/OFF
+  Exit: 
+    Press RedButton to exit to main display 
+ */
+
 #include "RTClib.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -27,13 +61,13 @@ int choice = 0; // used in switch lights on/off, for displaying correct choice
 
 int SunBrightness = 0; // sets minimum brightness of sun light, max 255
 int SunFadeamount = 5; // amount that the sun light will fade, max 255
-unsigned long SunFadeSpeed = 71000; // how fast the sun light will fade
+unsigned long SunFadeSpeed = 65454; // how fast the sun light will fade, with this it takes approximately 1 hour to fade from 0 to 255
 
 int maxMoonBrightness = 238; // need to check how bright the moon should be
 
 int MoonFadeamount = 17; // this may change due to maxMoonBrightness
 
-int MoonBrightness = 68; // sets current brightness of the moon light
+int MoonBrightness = 0; // sets current brightness of the moon light
 int moonDay = 0;  // used to set how much moon light to begin with, 1 = no moon, 14 == full moon
 int MoonPhase = 0; // used to check if moon brightness is going up or down
 int MoonLight; // used to get the right amount of brightness when moon down
@@ -126,9 +160,9 @@ void loop() {
   } else {
     Menu(); // display menu
   }
-  
+
   if (LCDbacklight == true) {
-    
+
     // monitor if WhiteButton is pressed, if pressed add one to menu variable for menu
     if (digitalRead(WhiteButton) == 1) {
       ShowMenu++;
@@ -196,33 +230,33 @@ void Sunrise() {
   //  Serial.println("Done");
   //  Serial.print("Moon phase: ");
   //  Serial.println(MoonPhase);
-  
+
   SunLightON = true;
-  
+
+  PlantLightOn(); // turns on Plant lights
   // run MoonDown
   MoonDown();
 
   // If moon not been full, add brightness. if moon been full, subtract brightness
   if (MoonPhase == 0) {
-    
+
     MoonBrightness += MoonFadeamount;
-    
+
     if (MoonBrightness == maxMoonBrightness) {
       MoonPhase = 1; // Full moon has occured
     }
   } else {
     MoonBrightness -= MoonFadeamount;
-    
+
     if (MoonBrightness == 0) {
       MoonPhase = 0; // no moon has occured
     }
   }
-  PlantLightOn(); // turns on Plant lights
 }
 
 // fade down sun light
 void Sunset() {
-  
+
   PlantLightOff(); // turns of plant lights
 
   // for printing to monitor in Arduino IDE during testing
@@ -231,7 +265,7 @@ void Sunset() {
   // run MoonUp
   MoonUp();
   SunLightON = false;
-  
+
   while (SunBrightness > 0) {
     SunBrightness -= SunFadeamount;
     ledcWrite(SunChannel, SunBrightness);
@@ -250,7 +284,7 @@ void Sunset() {
 
 // fade up Moon light
 void MoonUp() {
-  
+
   MoonLight = 0; // so that moon begings off
 
   // for printing to monitor in Arduino IDE during testing
@@ -267,7 +301,7 @@ void MoonUp() {
     DisplayTime(); // for updating LCD during sunrise
   }
   MoonLightON = true;
-  
+
   // for printing to monitor in Arduino IDE during testing
   //  Serial.print(" Done. Moon brightness: ");
   //  Serial.println(MoonBrightness);
@@ -276,10 +310,10 @@ void MoonUp() {
 
 // fade down Moon light
 void MoonDown() {
-  
+
   MoonLight = MoonBrightness; // so moon begings at right brightness
   MoonLightON = false;
-  
+
   // for printing to monitor in Arduino IDE during testing
   //  Serial.print("Moon set");
   while (MoonLight > 0) {
@@ -302,7 +336,7 @@ void MoonDown() {
 
 // getting temperature from sensor
 void readTemp() {
-  
+
   sensors.requestTemperatures();
   tempCelsius = sensors.getTempCByIndex(0);
 
@@ -384,7 +418,7 @@ void DisplayTime() {
 
 // printing temp on LCD
 void DisplayTemp() {
-  
+
   lcd.print(tempCelsius);
   lcd.write(0); //print "°"
   lcd.print("C");
@@ -392,13 +426,13 @@ void DisplayTemp() {
 
 // set amount of moon brightness to begin with, 0 = no moon, 14 = Full moon
 void setMoonPhase() {
-  
+
   // checking if MoonBrightness is set to more than 0, if so adjust moonDay
   if (MoonBrightness > 0) {
     moonDay = MoonBrightness / MoonFadeamount;
   }
   lcd.print("Set moon day: ");
- 
+
   // setCursor to different place on LCD
   if (moonDay < 10) {
     lcd.setCursor(15, 0);
@@ -406,11 +440,13 @@ void setMoonPhase() {
     lcd.setCursor(14, 0);
   }
   lcd.print(moonDay);
-  
+
   if (digitalRead(YellowButton) == 1) {
-  
+
     if (moonDay == 14) {
       moonDay = 0;
+      MoonBrightness = 0;
+      lcd.clear();
     } else {
       moonDay++;
       MoonBrightness = MoonFadeamount * moonDay; // set MoonBrigthness by day
@@ -418,9 +454,23 @@ void setMoonPhase() {
       MoonLightON = true;
     }
   }
+  
+  if (digitalRead(RedButton) == 1) {
+
+    if(moonDay == 0) {
+      moonDay = 14;
+      MoonBrightness = maxMoonBrightness;
+      lcd.clear();
+    } else {
+      moonDay--;
+      MoonBrightness = MoonFadeamount * moonDay; // set MoonBrigthness by day
+      ledcWrite(MoonChannel, MoonBrightness);
+      MoonLightON = true;
+  }
+  }
   lcd.setCursor(2, 1);
   lcd.print("Brightness:");
-  
+
   // setCursor to different place on LCD
   if (MoonBrightness < 10) {
     lcd.setCursor(15, 1);
@@ -437,7 +487,7 @@ void setMoonPhase() {
 void setMoonBrightness() {
 
   lcd.print("Moon light:");
-  
+
   // setCursor to different place on LCD
   if (MoonBrightness < 10) {
     lcd.setCursor(15, 0);
@@ -446,11 +496,11 @@ void setMoonBrightness() {
   } else if (MoonBrightness >= 100) {
     lcd.setCursor(13, 0);
   }
-  
+
   lcd.print(MoonBrightness);
   lcd.setCursor(2, 1);
   lcd.print("Moon max:");
-  
+
   // setCursor to different place on LCD
   if (maxMoonBrightness < 10) {
     lcd.setCursor(15, 1);
@@ -459,22 +509,23 @@ void setMoonBrightness() {
   } else if (maxMoonBrightness >= 100) {
     lcd.setCursor(13, 1);
   }
-  
+
   lcd.print(maxMoonBrightness);
 
   if (digitalRead(YellowButton) == 1) {
-    
+
     if (maxMoonBrightness == 238) {
+      lcd.clear();
       maxMoonBrightness = 0;
     } else {
       maxMoonBrightness += MoonFadeamount;
     }
-    
+
     if (MoonBrightness >= maxMoonBrightness) {
       MoonBrightness = maxMoonBrightness;
     }
   }
-  
+
   // for lighting the moon light to see how bright maximum is
   if (digitalRead(RedButton) == 1) {
     ledcWrite(MoonChannel, maxMoonBrightness);
@@ -486,11 +537,11 @@ void setMoonBrightness() {
 
 // creating menu
 void Menu() {
-  
+
   if (digitalRead(WhiteButton) == 1) {
     menu++;
   }
-  
+
   if (menu > 10) {
     menu = 0;
   }
@@ -530,7 +581,7 @@ void Menu() {
       lcd.print("TO EXIT MENU");
       lcd.setCursor(0, 1);
       lcd.print("Press Red Button");
-      
+
       if (digitalRead(RedButton) == 1 ) {
         lcd.clear();
         menu = 0; // set menu to default
@@ -567,18 +618,18 @@ void adjustClock() {
   if (now.minute() < 10)
     lcd.print("0");
   lcd.print(now.minute());
-  
+
   if (digitalRead(YellowButton) == 1) {
- 
+
     if (h == 23) {
       h = 0;    // for going to 0, instead of 24 after 23
     } else {
       h++;
     }
   }
-  
+
   if (digitalRead(RedButton) == 1) {
-  
+
     if (mi == 59) {
       mi = 0;    // for going to 0, instead of 60 after 55
       h++; // add 1 hour
@@ -606,18 +657,18 @@ void SetSunriseTime() {
   if (StartSunriseMin < 10)
     lcd.print("0");  // adding leading 0 if under 10
   lcd.print(StartSunriseMin);
-  
+
   if (digitalRead(YellowButton) == 1) {
-  
+
     if (StartSunriseHour == 23) {
       StartSunriseHour = 0;    // for going to 0, instead of 24 after 23
     } else {
       StartSunriseHour++;
     }
   }
-  
+
   if (digitalRead(RedButton) == 1) {
-    
+
     if (StartSunriseMin == 55) {
       StartSunriseMin = 0;    // for going to 0, instead of 60 after 55
     } else {
@@ -643,7 +694,7 @@ void SetPlantLightOffTime() {
   lcd.print(PlantLightOFFmin);
 
   if (digitalRead(YellowButton) == 1) {
-    
+
     if (PlantLightOFFhour == 23) {
       PlantLightOFFhour = 0;    // for going to 0, instead of 24 after 23
     } else {
@@ -651,9 +702,9 @@ void SetPlantLightOffTime() {
     }
     PlantLightONhour = PlantLightOFFhour;
   }
-  
+
   if (digitalRead(RedButton) == 1) {
-    
+
     if (PlantLightOFFmin == 55) {
       PlantLightOFFmin = 0;    // for going to 0, instead of 60 after 55
     } else {
@@ -678,18 +729,18 @@ void SetPlantLightOnTime() {
   if (PlantLightONmin < 10)
     lcd.print("0");
   lcd.print(PlantLightONmin);
-  
+
   if (digitalRead(YellowButton) == 1) {
-    
+
     if (PlantLightONhour == 23) {
       PlantLightONhour = 0;    // for going to 0, instead of 24 after 23
     } else {
       PlantLightONhour++;
     }
   }
-  
+
   if (digitalRead(RedButton) == 1) {
-    
+
     if (PlantLightONmin == 55) {
       PlantLightONmin = 0;    // for going to 0, instead of 60 after 55
     } else {
@@ -714,18 +765,18 @@ void SetSunsetTime() {
   if (StartSunsetMin < 10)
     lcd.print("0");
   lcd.print(StartSunsetMin);
-  
+
   if (digitalRead(YellowButton) == 1) {
-    
+
     if (StartSunsetHour == 23) {
       StartSunsetHour = 0;    // for going to 0, instead of 24 after 23
     } else {
       StartSunsetHour++;
     }
   }
-  
+
   if (digitalRead(RedButton) == 1) {
-    
+
     if (StartSunsetMin == 55) {
       StartSunsetMin = 0;    // for going to 0, instead of 60 after 55
     } else {
@@ -797,7 +848,7 @@ void LightsONOFF() {
 
 // switching Sun light on/off
 void SwitchSunLight() {
-  
+
   lcd.print("Lights on/off");
   lcd.setCursor(0, 1);
   lcd.print("Sun Light");
@@ -809,7 +860,7 @@ void SwitchSunLight() {
   }
 
   if (digitalRead(RedButton) == 1) {
-    
+
     if (SunLightON == true) {
       ledcWrite(SunChannel, 0); // turn off light
       SunLightON = false;
