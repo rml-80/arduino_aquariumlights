@@ -1,8 +1,11 @@
 /*
-Button functions
+  Button functions
 
-Press WhiteButton to enter the menu
- In Set Sunrise Time:
+  While in main display
+  Press YellowButton to toggle LCD Backlight
+
+  Press WhiteButton to enter the menu
+  In Set Sunrise Time:
     Press YellowButton to add 1 hour, goes to 23 then to 0
     Press RedButton to add 5 minutes, goes to 55 then to 0
   In Set Sunrise Time:
@@ -28,15 +31,16 @@ Press WhiteButton to enter the menu
   Lights ON/OFF:
     Press YellowButton to toggle through lights, (Sun, Moon, Plant)
     Press RedButton to toggle light ON/OFF
-  Exit: 
-    Press RedButton to exit to main display 
- */
+  Exit:
+    Press RedButton to exit to main display
+*/
 
+// include libaries
 #include "RTClib.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <OneWire.h> // for RTC and LCD
+#include <DallasTemperature.h> // for Temperature sensor
+//#include <Wire.h>
+#include <LiquidCrystal_I2C.h> // for LCD
 
 // define pins in use
 #define BlueLED 27
@@ -107,15 +111,16 @@ int MoonChannel = 1;
 int resolution = 8;
 
 int ShowMenu = 0;
+bool demo = false; // run demo
 
-bool LCDbacklight = false;
+bool LCDbacklight = true;
 bool SunLightON = false;
 bool MoonLightON = false;
 bool PlantLightON = false;
 
 void setup() {
   Serial.begin(9600);
-  Wire.begin();
+  //  Wire.begin();
   if (! rtc.begin()) {
     Serial.println("Didn't find rtc");
   }
@@ -138,6 +143,7 @@ void setup() {
   pinMode(GreenLED, OUTPUT);
   pinMode(RedLED, OUTPUT);
   pinMode(RelayPin, OUTPUT);
+
 }
 
 void loop() {
@@ -182,7 +188,7 @@ void loop() {
 
   // checking time for doing stuff
   if (now.hour() == StartSunriseHour && now.minute() == StartSunriseMin) {
-    Sunrise();
+    Sunrise(SunFadeSpeed, MoonFadeSpeed);
   }
   if (now.hour() == PlantLightOFFhour && now.minute() == PlantLightOFFmin) {
     PlantLightOff();
@@ -191,7 +197,7 @@ void loop() {
     PlantLightOn();
   }
   if (now.hour() == StartSunsetHour && now.minute() == StartSunsetMin) {
-    Sunset();
+    Sunset(SunFadeSpeed, MoonFadeSpeed);
   }
   delay(50);
 }
@@ -208,7 +214,7 @@ void PlantLightOff() {
   PlantLightON = false;
 }
 
-void Sunrise() {
+void Sunrise(int SunSpeed, int MoonSpeed) {
   // for printing to monitor in Arduino IDE during testing
   //  Serial.println("Sunrise ");
   //  Serial.print("MOON Brightness: ");
@@ -218,12 +224,13 @@ void Sunrise() {
   while (SunBrightness < 255) {
     SunBrightness += SunFadeamount;
     ledcWrite(SunChannel, SunBrightness);
-    delay(SunFadeSpeed);
+    delay(SunSpeed);
 
     // for printing to monitor in Arduino IDE during testing
     //    Serial.print(".");
-
-    DisplayTime(); // for updating LCD during sunrise
+    if (!demo) {
+      DisplayTime(); // for updating LCD during sunrise
+    }
   }
 
   // for printing to monitor in Arduino IDE during testing
@@ -235,7 +242,7 @@ void Sunrise() {
 
   PlantLightOn(); // turns on Plant lights
   // run MoonDown
-  MoonDown();
+  MoonDown(MoonSpeed);
 
   // If moon not been full, add brightness. if moon been full, subtract brightness
   if (MoonPhase == 0) {
@@ -255,7 +262,7 @@ void Sunrise() {
 }
 
 // fade down sun light
-void Sunset() {
+void Sunset(int SunSpeed, int MoonSpeed) {
 
   PlantLightOff(); // turns of plant lights
 
@@ -263,27 +270,27 @@ void Sunset() {
   //  Serial.println("Sunset ");
 
   // run MoonUp
-  MoonUp();
+  MoonUp(MoonSpeed);
   SunLightON = false;
 
   while (SunBrightness > 0) {
     SunBrightness -= SunFadeamount;
     ledcWrite(SunChannel, SunBrightness);
-    delay(SunFadeSpeed);
+    delay(SunSpeed);
 
     // for printing to monitor in Arduino IDE during testing
     //    Serial.print(".");
-
-    DisplayTime(); // for updating LCD during sunrise
+    if (!demo) {
+      DisplayTime(); // for updating LCD during sunrise
+    }
   }
-
   // for printing to monitor in Arduino IDE during testing
   //  Serial.println("Done");
   //  Serial.println("Night");
 }
 
 // fade up Moon light
-void MoonUp() {
+void MoonUp(int MoonSpeed) {
 
   MoonLight = 0; // so that moon begings off
 
@@ -293,12 +300,13 @@ void MoonUp() {
   while (MoonLight < MoonBrightness) {
     MoonLight ++;
     ledcWrite(MoonChannel, MoonLight);
-    delay(MoonFadeSpeed);
+    delay(MoonSpeed);
 
     // for printing to monitor in Arduino IDE during testing
     //    Serial.print(".");
-
-    DisplayTime(); // for updating LCD during sunrise
+    if (!demo) {
+      DisplayTime(); // for updating LCD during sunrise
+    }
   }
   MoonLightON = true;
 
@@ -309,7 +317,7 @@ void MoonUp() {
 }
 
 // fade down Moon light
-void MoonDown() {
+void MoonDown(int MoonSpeed) {
 
   MoonLight = MoonBrightness; // so moon begings at right brightness
   MoonLightON = false;
@@ -319,12 +327,13 @@ void MoonDown() {
   while (MoonLight > 0) {
     MoonLight --;
     ledcWrite(MoonChannel, MoonLight);
-    delay(MoonFadeSpeed);
+    delay(MoonSpeed);
 
     // for printing to monitor in Arduino IDE during testing
     //    Serial.print(".");
-
-    DisplayTime(); // for updating LCD during sunrise
+    if (!demo) {
+      DisplayTime(); // for updating LCD during sunrise
+    }
   }
 
   // for printing to monitor in Arduino IDE during testing
@@ -424,8 +433,27 @@ void DisplayTemp() {
   lcd.print("C");
 }
 
-// set amount of moon brightness to begin with, 0 = no moon, 14 = Full moon
 void setMoonPhase() {
+  lcd.print("Set Moon Phase");
+  if (MoonPhase == 0 ) {
+    lcd.setCursor(0, 1);
+    lcd.print("Fading Up  ");
+  } else {
+    lcd.setCursor(0, 1);
+    lcd.print("Fading Down");
+  }
+  if (digitalRead(YellowButton) == 1 ) {
+    if (MoonPhase == 0) {
+      MoonPhase = 1;
+    } else if (MoonPhase == 1) {
+      MoonPhase = 0;
+    }
+  }
+  lcd.setCursor(0, 0);
+}
+
+// set amount of moon brightness to begin with, 0 = no moon, 14 = Full moon
+void setMoonDay() {
 
   // checking if MoonBrightness is set to more than 0, if so adjust moonDay
   if (MoonBrightness > 0) {
@@ -454,10 +482,10 @@ void setMoonPhase() {
       MoonLightON = true;
     }
   }
-  
+
   if (digitalRead(RedButton) == 1) {
 
-    if(moonDay == 0) {
+    if (moonDay == 0) {
       moonDay = 14;
       MoonBrightness = maxMoonBrightness;
       lcd.clear();
@@ -466,7 +494,7 @@ void setMoonPhase() {
       MoonBrightness = MoonFadeamount * moonDay; // set MoonBrigthness by day
       ledcWrite(MoonChannel, MoonBrightness);
       MoonLightON = true;
-  }
+    }
   }
   lcd.setCursor(2, 1);
   lcd.print("Brightness:");
@@ -542,7 +570,7 @@ void Menu() {
     menu++;
   }
 
-  if (menu > 10) {
+  if (menu > 11) {
     menu = 0;
   }
   switch (menu) {
@@ -574,9 +602,12 @@ void Menu() {
       setMoonPhase();
       break;
     case 9:
-      LightsONOFF();
+      setMoonDay();
       break;
     case 10:
+      LightsONOFF();
+      break;
+    case 11:
       lcd.setCursor(2, 0);
       lcd.print("TO EXIT MENU");
       lcd.setCursor(0, 1);
@@ -587,6 +618,9 @@ void Menu() {
         menu = 0; // set menu to default
         ShowMenu = 0; // set ShowMenu to default, used in main loop
         choice = 0; // set choice to default, used in submenu for lights
+      }
+      if (digitalRead(YellowButton) == 1 ) {
+        Demo();
       }
       break;
   }
@@ -931,4 +965,33 @@ void printON() {
 void printOFF() {
   lcd.setCursor(13, 1);
   lcd.print("OFF");
+}
+
+// demo
+void Demo() {
+  demo = true; // set demo true
+  lcd.clear(); // clear LCD
+  lcd.print("Demo mode"); //print to LCD
+  lcd.setCursor(0, 1);
+  lcd.print("Activeted"); // print to LCD
+
+  // not working right now, not setup as a interop
+  if (digitalRead(RedButton) == 1 ) {
+    lcd.clear();
+    demo = false;
+  } else {
+    while (demo) {
+      Sunrise(100, 50); // run sunrise with fixed sunfadespeed and moonfadespeed
+      // setCursor to different place on LCD
+      if (MoonBrightness < 10) {
+        lcd.setCursor(15, 1);
+      } else if (MoonBrightness >= 10 && MoonBrightness < 100) {
+        lcd.setCursor(14, 1);
+      } else {
+        lcd.setCursor(13, 1);
+      }
+      lcd.print(MoonBrightness); // print to LCD
+      Sunset(100, 50); // run sunset with fixed sunfadespeed and moonfadespeed
+    }
+  }
 }
